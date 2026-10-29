@@ -1,0 +1,4 @@
+# dsh-code-git: a Code and Git workbench for the DSH Web UI.
+- insert:
+    - id: code-git-workbench
+      name: dsh-code-git-workbench

@@ -1,0 +1,41 @@
+{
+  "name": "dsh-code-git-workbench",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Code and Git workbench for the DeepSeek Harness Web UI: project file tree, code editor, and a PyCharm-style Git panel.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DazzzleKK/dsh-code-git-workbench.git"
+  },
+  "homepage": "https://github.com/DazzzleKK/dsh-code-git-workbench#readme",
+  "bugs": {
+    "url": "https://github.com/DazzzleKK/dsh-code-git-workbench/issues"
+  },
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "files": [
+    "index.mjs",
+    "client.js",
+    "cordis.patch.yml",
+    "web",
+    "README.md",
+    "AGENTS.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ]
+}

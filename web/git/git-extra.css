@@ -1,0 +1,216 @@
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--vscode-editor-background, #1b1b1d);
+}
+
+/* ------------------------------------------------------------------ diff */
+
+.diff-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 18px;
+}
+
+.diff-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, 100%);
+  height: 100%;
+  max-height: 100%;
+  border: 1px solid var(--vscode-panel-border, #333);
+  border-radius: 8px;
+  background: var(--vscode-editor-background, #1b1b1d);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.diff-head {
+  flex: 0 0 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--vscode-panel-border, #333);
+  background: var(--vscode-sideBar-background, #202024);
+}
+
+.diff-title {
+  flex: 1 1 auto;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diff-stats {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 10.5px;
+  color: var(--vscode-descriptionForeground, #999);
+  white-space: nowrap;
+}
+
+.diff-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 8px 0 20px;
+}
+
+.diff-row {
+  display: grid;
+  grid-template-columns: 42px 42px 1fr;
+  white-space: pre;
+  min-width: max-content;
+}
+
+.diff-row .n {
+  padding: 0 8px;
+  text-align: right;
+  color: var(--vscode-descriptionForeground, #888);
+  opacity: 0.65;
+  user-select: none;
+}
+
+.diff-row .t {
+  padding: 0 12px;
+  min-width: 0;
+}
+
+.diff-row.add {
+  background: rgba(63, 185, 80, 0.13);
+}
+
+.diff-row.add .t {
+  color: #7ee787;
+}
+
+.diff-row.del {
+  background: rgba(248, 81, 73, 0.12);
+}
+
+.diff-row.del .t {
+  color: #ffa198;
+}
+
+.diff-row.add .n,
+.diff-row.del .n {
+  opacity: 0.95;
+}
+
+.diff-note {
+  padding: 20px;
+  color: var(--vscode-descriptionForeground, #999);
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: 12px;
+}
+
+/* --------------------------------------------------------------- prompt */
+
+.prompt-panel {
+  width: min(420px, calc(100vw - 36px));
+  padding: 18px;
+  border: 1px solid var(--vscode-panel-border, #333);
+  border-radius: 8px;
+  background: var(--vscode-sideBar-background, #202024);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+}
+
+.prompt-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.prompt-text {
+  color: var(--vscode-descriptionForeground, #999);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.prompt-input {
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin-bottom: 14px;
+  padding: 0 8px;
+  border: 1px solid var(--vscode-input-border, #444);
+  border-radius: 4px;
+  background: var(--vscode-input-background, #2a2a2e);
+  color: var(--vscode-input-foreground, #ddd);
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: 12px;
+  outline: none;
+}
+
+.prompt-input:focus {
+  border-color: var(--vscode-focusBorder, #4f9cf7);
+}
+
+.prompt-input[hidden] {
+  display: none;
+}
+
+.prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.prompt-actions .btn {
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--vscode-panel-border, #444);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-foreground, #ddd);
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.prompt-actions .btn:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+
+.prompt-actions .btn.primary {
+  border-color: var(--vscode-focusBorder, #4f9cf7);
+  color: var(--vscode-focusBorder, #4f9cf7);
+}
+
+.prompt-actions .btn.danger {
+  color: var(--vscode-errorForeground, #f85149);
+  border-color: var(--vscode-errorForeground, #f85149);
+}
+
+/* Details overlay tweaks for the narrow right sidebar. */
+@media (max-width: 900px) {
+  .details-pane {
+    background: var(--vscode-sideBar-background, #202024);
+  }
+}
+
+/* Keep the toolbar compact in the sidebar width. */
+@media (max-width: 720px) {
+  .branch-chip {
+    max-width: 30%;
+  }
+
+  .ref-meta {
+    display: none;
+  }
+}
