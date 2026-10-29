@@ -26,7 +26,9 @@
     details: persisted.detailsWidth || 320,
   };
   var FAVORITES_KEY = 'dsh-code-git.favorites.v1';
+  var FOLDERS_KEY = 'dsh-code-git.branch-folders.v1';
   var favorites = loadFavorites();
+  var folderState = loadFolderState();
   var lastRef = null;
   var filteredCommits = [];
   var rowByHash = new Map();
@@ -162,9 +164,158 @@
       list.splice(index, 1);
     } else {
       list.push(ref);
+      expandAncestors(branch);
     }
     saveFavorites();
     renderBranches();
+  }
+
+  function loadFolderState() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(FOLDERS_KEY) || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveFolderState() {
+    try {
+      localStorage.setItem(FOLDERS_KEY, JSON.stringify(folderState));
+    } catch (error) {
+      // Keep the expansion state in memory if storage is unavailable.
+    }
+  }
+
+  function folderStore() {
+    var key = repoKey();
+    if (!key) {
+      return {};
+    }
+    if (!folderState[key] || typeof folderState[key] !== 'object') {
+      folderState[key] = {};
+    }
+    return folderState[key];
+  }
+
+  function uniqueRemotes(branches) {
+    var names = new Set();
+    branches.forEach(function (branch) {
+      names.add(branch.remote || branch.name.split('/')[0]);
+    });
+    return names;
+  }
+
+  function treeParts(branch, groupKey, stripRemote) {
+    var parts = String(branch.name || '')
+      .split('/')
+      .filter(Boolean);
+    if (!parts.length) {
+      parts = [branch.name || ''];
+    }
+    if (groupKey === 'remote' && stripRemote && parts.length > 1) {
+      parts = parts.slice(1);
+    }
+    return parts;
+  }
+
+  function defaultOpenFolders(branches, groupKey, stripRemote) {
+    var open = new Set();
+    branches.forEach(function (branch) {
+      if (!branch.current && !isFavorite(branch)) {
+        return;
+      }
+      var parts = treeParts(branch, groupKey, stripRemote);
+      var path = '';
+      for (var i = 0; i < parts.length - 1; i++) {
+        path = path ? path + '/' + parts[i] : parts[i];
+        open.add(groupKey + ':' + path);
+      }
+    });
+    return open;
+  }
+
+  function isFolderExpanded(groupKey, path, defaultOpen) {
+    var store = folderStore();
+    var key = groupKey + ':' + path;
+    if (typeof store[key] === 'boolean') {
+      return store[key];
+    }
+    return defaultOpen.has(key);
+  }
+
+  function setFolderExpanded(groupKey, path, value) {
+    folderStore()[groupKey + ':' + path] = value;
+    saveFolderState();
+  }
+
+  function expandAncestors(branch) {
+    var groupKey = branch.isRemote ? 'remote' : 'local';
+    var groupBranches = state
+      ? state.branches.filter(function (item) {
+          return !!item.isRemote === !!branch.isRemote;
+        })
+      : [];
+    var stripRemote = groupKey === 'remote' && uniqueRemotes(groupBranches).size === 1;
+    var parts = treeParts(branch, groupKey, stripRemote);
+    var path = '';
+    for (var i = 0; i < parts.length - 1; i++) {
+      path = path ? path + '/' + parts[i] : parts[i];
+      setFolderExpanded(groupKey, path, true);
+    }
+  }
+
+  function buildBranchTree(branches, groupKey) {
+    var stripRemote = groupKey === 'remote' && uniqueRemotes(branches).size === 1;
+    var root = { name: '', path: '', folders: new Map(), branches: [] };
+    branches.forEach(function (branch) {
+      var parts = treeParts(branch, groupKey, stripRemote);
+      var node = root;
+      var path = '';
+      for (var i = 0; i < parts.length - 1; i++) {
+        var segment = parts[i];
+        path = path ? path + '/' + segment : segment;
+        if (!node.folders.has(segment)) {
+          node.folders.set(segment, {
+            name: segment,
+            path: path,
+            folders: new Map(),
+            branches: [],
+          });
+        }
+        node = node.folders.get(segment);
+      }
+      node.branches.push({
+        branch: branch,
+        display: parts[parts.length - 1],
+      });
+    });
+
+    var count = function (node) {
+      var total = node.branches.length;
+      node.folders.forEach(function (child) {
+        total += count(child);
+      });
+      node.count = total;
+      return total;
+    };
+    count(root);
+    return { root: root, stripRemote: stripRemote };
+  }
+
+  function compareBranches(a, b) {
+    var aFavorite = isFavorite(a.branch) ? 0 : 1;
+    var bFavorite = isFavorite(b.branch) ? 0 : 1;
+    if (aFavorite !== bFavorite) {
+      return aFavorite - bFavorite;
+    }
+    if (a.branch.current !== b.branch.current) {
+      return a.branch.current ? -1 : 1;
+    }
+    return a.branch.name.localeCompare(b.branch.name, undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
   }
 
   function sendAction(action, payload) {
@@ -603,17 +754,7 @@
 
   function branchGroup(title, branches, key) {
     var group = h('div', 'branch-group');
-    var visible = branches.filter(matchesBranch).sort(function (a, b) {
-      var aFavorite = isFavorite(a) ? 0 : 1;
-      var bFavorite = isFavorite(b) ? 0 : 1;
-      if (aFavorite !== bFavorite) {
-        return aFavorite - bFavorite;
-      }
-      if (a.current !== b.current) {
-        return a.current ? -1 : 1;
-      }
-      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-    });
+    var visible = branches.filter(matchesBranch);
     var header = h('div', 'group-row' + (collapsed[key] && !branchFilter ? ' collapsed' : ''));
     header.appendChild(iconEl('chevron-down', 'chevron'));
     header.appendChild(h('span', null, title));
@@ -630,15 +771,80 @@
     if (!collapsed[key] || branchFilter) {
       if (!visible.length) {
         group.appendChild(h('div', 'details-loading', branchFilter ? 'No matches' : 'None'));
+        return group;
       }
-      visible.forEach(function (branch) {
-        group.appendChild(branchRow(branch));
-      });
+      var built = buildBranchTree(visible, key);
+      var defaultOpen = defaultOpenFolders(visible, key, built.stripRemote);
+      renderBranchNodes(group, built.root, key, 0, defaultOpen);
     }
     return group;
   }
 
-  function branchRow(branch) {
+  function renderBranchNodes(container, node, groupKey, depth, defaultOpen) {
+    var entries = node.branches.slice().sort(compareBranches);
+    var favoriteEntries = entries.filter(function (entry) {
+      return isFavorite(entry.branch);
+    });
+    var regularEntries = entries.filter(function (entry) {
+      return !isFavorite(entry.branch);
+    });
+
+    favoriteEntries.forEach(function (entry) {
+      container.appendChild(branchRow(entry.branch, depth, entry.display));
+    });
+
+    var folders = Array.from(node.folders.values()).sort(function (a, b) {
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+    folders.forEach(function (folder) {
+      var expanded = branchFilter || isFolderExpanded(groupKey, folder.path, defaultOpen);
+      container.appendChild(branchFolderRow(folder, groupKey, depth, expanded));
+      if (expanded) {
+        renderBranchNodes(container, folder, groupKey, depth + 1, defaultOpen);
+      }
+    });
+
+    regularEntries.forEach(function (entry) {
+      container.appendChild(branchRow(entry.branch, depth, entry.display));
+    });
+  }
+
+  function branchFolderRow(folder, groupKey, depth, expanded) {
+    var row = h('div', 'branch-folder' + (expanded ? ' open' : ' collapsed'));
+    row.style.paddingLeft = 18 + depth * 12 + 'px';
+    row.tabIndex = 0;
+    row.setAttribute('role', 'treeitem');
+    row.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    row.dataset.folder = groupKey + ':' + folder.path;
+    row.title = folder.path;
+    row.appendChild(iconEl('chevron-down', 'chevron'));
+    row.appendChild(iconEl('folder', 'folder-icon'));
+    row.appendChild(h('span', 'folder-name', folder.name));
+    row.appendChild(h('span', 'folder-count', String(folder.count)));
+    row.addEventListener('click', function (event) {
+      event.stopPropagation();
+      if (branchFilter) {
+        return;
+      }
+      setFolderExpanded(groupKey, folder.path, !expanded);
+      renderBranches();
+    });
+    row.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (branchFilter) {
+        return;
+      }
+      setFolderExpanded(groupKey, folder.path, !expanded);
+      renderBranches();
+    });
+    return row;
+  }
+
+  function branchRow(branch, depth, displayName) {
     var selected = state && state.ref === branch.name;
     var favorite = isFavorite(branch);
     var row = h(
@@ -651,8 +857,9 @@
     );
     row.setAttribute('role', 'treeitem');
     row.dataset.ref = branch.name;
+    row.style.paddingLeft = 18 + (depth || 0) * 12 + 'px';
     row.appendChild(iconEl(branch.isRemote ? 'cloud' : 'git-branch', 'branch-icon'));
-    row.appendChild(h('span', 'branch-name', branch.name));
+    row.appendChild(h('span', 'branch-name', displayName || branch.name));
     if (branch.current) {
       row.appendChild(iconEl('check', 'branch-check'));
     }

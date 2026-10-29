@@ -92,9 +92,24 @@ at startup can break the client bundle. Opening is through the `+` guide.
 activity from `aria-label` (`running` vs `not running`), and moves running rows
 first. Avoid touching host state; keep the observer cheap and idempotent.
 
-### Branch favorites
+### Branch tree and favorites
 
-Favorites are a DSH-only UI feature in `web/git/main.js`:
+The branch list is a tree built in `web/git/main.js` from slash-separated names:
+
+- `buildBranchTree` splits `feat/123-login` into the `feat` folder plus a
+  `123-login` leaf, separately for Local and Remote;
+- for Remote, a single remote name is stripped from the path (Remote → `feat`),
+  while multiple remotes become the first folder (Remote → `origin` → `feat`);
+- `renderBranchNodes` renders favorite leaves first, then folders, then the rest;
+  inside each folder the same favorites-first rule applies;
+- `defaultOpenFolders` opens the ancestors of the current branch and of
+  favorites; explicit expand/collapse is stored in
+  `dsh-code-git.branch-folders.v1` (localStorage, per repository root);
+- folder rows show a branch count and are keyboard-expandable;
+- filter mode force-expands matching folders and does not persist that
+  expansion.
+
+Favorites are a DSH-only UI feature:
 
 - storage key `dsh-code-git.favorites.v1` in `localStorage`, a map from the
   repository root (`state.repoRoot`, fallback `state.repo`) to an array of full
@@ -102,13 +117,12 @@ Favorites are a DSH-only UI feature in `web/git/main.js`:
 - a star button in each branch row (visible on hover, always visible when
   favorited) and an Add/Remove from Favorites item at the top of the branch
   context menu;
-- each group is sorted favorites-first, then current branch, then natural name
-  order — never move a branch between Local and Remote;
+- `toggleFavorite` expands the folder path of a newly favorited branch;
 - stale refs are pruned in `applyState`;
 - `bridge.js` forwards `repoRoot` in the state for the storage key.
 
-When porting the Git UI to the VS Code extension, carry the favorites code and
-CSS with it; it is not a host-side feature.
+When porting the Git UI to the VS Code extension, carry the tree, favorites and
+CSS with it; they are not host-side features.
 
 ### Git UI bridge
 
@@ -152,9 +166,12 @@ Minimum smoke test:
 4. Switch workspace; tree/footer/crumbs update.
 5. Git loads branches and commits; open details and a file diff.
 6. Remote group collapses when >40 remotes.
-7. Star a local branch and a remote branch; both move to the top of their group,
-   and the state survives an iframe reload.
-8. Subagent catalog opens; running rows are above idle rows.
+7. Slash branches render as folders, the current branch path is open by default,
+   and folder expand/collapse survives an iframe reload.
+8. Filtering a branch expands only matching folders (for example `3493`).
+9. Star a local branch inside a folder and a remote branch inside a folder; both
+   move to the top of their folder, and the state survives an iframe reload.
+10. Subagent catalog opens; running rows are above idle rows.
 
 Use a throwaway Git repository for actions. Do not run reset/merge/rebase/push
 against a user's working repository in tests.

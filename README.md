@@ -105,9 +105,14 @@ Restart the application afterwards.
 - Branch tree with local/remote groups, filter, current branch, ahead/behind,
   checkout, checkout + rebase, merge, rebase, compare, push, rename, delete and
   tag actions.
+- Slash-separated branch names become expandable folders: `feat/123-login` is
+  shown as `feat` → `123-login`. The tree is built independently inside Local
+  and Remote. With a single remote, its name is treated as context and stripped
+  from the folder path; with several remotes, the remote name becomes the first
+  folder. Folder expansion is remembered per repository.
 - Branches can be starred from the row or from the context menu. Favorites float
-  to the top of their own group (Local or Remote); the choice is stored per Git
-  repository in the browser profile and survives tab/page reloads.
+  to the top of their own folder (and of the Local/Remote root); the choice is
+  stored per Git repository in the browser profile and survives tab/page reloads.
 - Commit log for the selected branch (or all branches) with the colored graph,
   ref badges, author and date; filter and “load more”.
 - Commit details with the full message, parents, files and `+/-`, plus checkout,

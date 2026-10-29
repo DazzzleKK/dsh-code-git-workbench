@@ -253,3 +253,60 @@ body {
   outline: 1px solid var(--accent);
   outline-offset: -1px;
 }
+
+/* ---------------------------------------------------------- branch folders */
+
+.branch-folder {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--row-h);
+  margin: 0 5px;
+  padding: 0 6px 0 18px;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.branch-folder:hover {
+  background: var(--hover);
+}
+
+.branch-folder:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.branch-folder .chevron {
+  flex: 0 0 auto;
+  width: 12px;
+  font-size: 12px;
+  transition: transform 0.1s ease;
+}
+
+.branch-folder.collapsed .chevron {
+  transform: rotate(-90deg);
+}
+
+.branch-folder .folder-icon {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.branch-folder .folder-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  font-size: 11.5px;
+}
+
+.branch-folder .folder-count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
