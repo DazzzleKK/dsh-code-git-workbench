@@ -13,7 +13,10 @@ It also keeps running subagents above idle ones in the header's subagent catalog
 popup.
 
 The plugin is host + client code for DeepSeek Harness. It has no build step and
-no dependency on VS Code.
+no dependency on VS Code. The PyCharm-style Git UI is shared in source form with
+the companion VS Code extension
+[pycharm-git-log](https://github.com/DazzzleKK/pycharm-git-log); the two
+repositories remain independent at runtime.
 
 ## Requirements
 
