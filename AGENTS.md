@@ -92,6 +92,24 @@ at startup can break the client bundle. Opening is through the `+` guide.
 activity from `aria-label` (`running` vs `not running`), and moves running rows
 first. Avoid touching host state; keep the observer cheap and idempotent.
 
+### Branch favorites
+
+Favorites are a DSH-only UI feature in `web/git/main.js`:
+
+- storage key `dsh-code-git.favorites.v1` in `localStorage`, a map from the
+  repository root (`state.repoRoot`, fallback `state.repo`) to an array of full
+  branch refs;
+- a star button in each branch row (visible on hover, always visible when
+  favorited) and an Add/Remove from Favorites item at the top of the branch
+  context menu;
+- each group is sorted favorites-first, then current branch, then natural name
+  order — never move a branch between Local and Remote;
+- stale refs are pruned in `applyState`;
+- `bridge.js` forwards `repoRoot` in the state for the storage key.
+
+When porting the Git UI to the VS Code extension, carry the favorites code and
+CSS with it; it is not a host-side feature.
+
 ### Git UI bridge
 
 `web/git/bridge.js` implements the `acquireVsCodeApi()` contract:
@@ -134,7 +152,9 @@ Minimum smoke test:
 4. Switch workspace; tree/footer/crumbs update.
 5. Git loads branches and commits; open details and a file diff.
 6. Remote group collapses when >40 remotes.
-7. Subagent catalog opens; running rows are above idle rows.
+7. Star a local branch and a remote branch; both move to the top of their group,
+   and the state survives an iframe reload.
+8. Subagent catalog opens; running rows are above idle rows.
 
 Use a throwaway Git repository for actions. Do not run reset/merge/rebase/push
 against a user's working repository in tests.

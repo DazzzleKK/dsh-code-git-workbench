@@ -25,6 +25,8 @@
     branches: persisted.branchesWidth || 220,
     details: persisted.detailsWidth || 320,
   };
+  var FAVORITES_KEY = 'dsh-code-git.favorites.v1';
+  var favorites = loadFavorites();
   var lastRef = null;
   var filteredCommits = [];
   var rowByHash = new Map();
@@ -85,6 +87,84 @@
       branchesWidth: widths.branches,
       detailsWidth: widths.details,
     });
+  }
+
+  function loadFavorites() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveFavorites() {
+    try {
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    } catch (error) {
+      // Private browsing or a locked-down webview: favorites stay in memory.
+    }
+  }
+
+  function repoKey() {
+    return state ? state.repoRoot || state.repo || '' : '';
+  }
+
+  function branchRef(branch) {
+    if (branch.ref) {
+      return branch.ref;
+    }
+    return (branch.isRemote ? 'refs/remotes/' : 'refs/heads/') + branch.name;
+  }
+
+  function favoriteList() {
+    var key = repoKey();
+    if (!key) {
+      return [];
+    }
+    if (!Array.isArray(favorites[key])) {
+      favorites[key] = [];
+    }
+    return favorites[key];
+  }
+
+  function isFavorite(branch) {
+    return favoriteList().indexOf(branchRef(branch)) >= 0;
+  }
+
+  function pruneFavorites() {
+    if (!state) {
+      return;
+    }
+    var key = repoKey();
+    if (!key || !Array.isArray(favorites[key])) {
+      return;
+    }
+    var valid = new Set(
+      state.branches.map(function (branch) {
+        return branchRef(branch);
+      })
+    );
+    var next = favorites[key].filter(function (ref) {
+      return valid.has(ref);
+    });
+    if (next.length !== favorites[key].length) {
+      favorites[key] = next;
+      saveFavorites();
+    }
+  }
+
+  function toggleFavorite(branch) {
+    var list = favoriteList();
+    var ref = branchRef(branch);
+    var index = list.indexOf(ref);
+    if (index >= 0) {
+      list.splice(index, 1);
+    } else {
+      list.push(ref);
+    }
+    saveFavorites();
+    renderBranches();
   }
 
   function sendAction(action, payload) {
@@ -334,6 +414,7 @@
   function applyState(next) {
     var previous = state;
     state = next;
+    pruneFavorites();
 
     if (!remoteDefaultApplied && !persisted.collapsed) {
       var remotes = next.branches.filter(function (branch) {
@@ -522,7 +603,17 @@
 
   function branchGroup(title, branches, key) {
     var group = h('div', 'branch-group');
-    var visible = branches.filter(matchesBranch);
+    var visible = branches.filter(matchesBranch).sort(function (a, b) {
+      var aFavorite = isFavorite(a) ? 0 : 1;
+      var bFavorite = isFavorite(b) ? 0 : 1;
+      if (aFavorite !== bFavorite) {
+        return aFavorite - bFavorite;
+      }
+      if (a.current !== b.current) {
+        return a.current ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
     var header = h('div', 'group-row' + (collapsed[key] && !branchFilter ? ' collapsed' : ''));
     header.appendChild(iconEl('chevron-down', 'chevron'));
     header.appendChild(h('span', null, title));
@@ -549,9 +640,14 @@
 
   function branchRow(branch) {
     var selected = state && state.ref === branch.name;
+    var favorite = isFavorite(branch);
     var row = h(
       'div',
-      'branch-row' + (branch.current ? ' current' : '') + (branch.isRemote ? ' remote' : '') + (selected ? ' selected' : '')
+      'branch-row' +
+        (branch.current ? ' current' : '') +
+        (branch.isRemote ? ' remote' : '') +
+        (favorite ? ' favorite' : '') +
+        (selected ? ' selected' : '')
     );
     row.setAttribute('role', 'treeitem');
     row.dataset.ref = branch.name;
@@ -573,6 +669,18 @@
     if (branch.gone) {
       row.appendChild(iconEl('warning', 'branch-gone'));
     }
+    var star = h('button', 'branch-star' + (favorite ? ' active' : ''));
+    star.type = 'button';
+    star.title = favorite ? 'Remove from favorites' : 'Add to favorites';
+    star.setAttribute('aria-label', favorite ? 'Remove from favorites' : 'Add to favorites');
+    star.setAttribute('aria-pressed', favorite ? 'true' : 'false');
+    star.appendChild(iconEl(favorite ? 'star-full' : 'star-empty'));
+    star.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleFavorite(branch);
+    });
+    row.appendChild(star);
     row.title =
       branch.name +
       (branch.upstream ? '\nupstream: ' + branch.upstream + (branch.gone ? ' (gone)' : '') : '\nno upstream') +
@@ -1237,8 +1345,17 @@
   function branchMenu(branch, x, y) {
     var current = state && state.current;
     var isCurrent = !!branch.current;
+    var favorite = isFavorite(branch);
     var items = [];
 
+    items.push({
+      label: favorite ? 'Remove from Favorites' : 'Add to Favorites',
+      icon: favorite ? 'star-full' : 'star-empty',
+      run: function () {
+        toggleFavorite(branch);
+      },
+    });
+    items.push({ sep: true });
     items.push({
       label: isCurrent ? 'Checkout (current)' : 'Checkout',
       icon: 'git-branch',

@@ -105,6 +105,9 @@ Restart the application afterwards.
 - Branch tree with local/remote groups, filter, current branch, ahead/behind,
   checkout, checkout + rebase, merge, rebase, compare, push, rename, delete and
   tag actions.
+- Branches can be starred from the row or from the context menu. Favorites float
+  to the top of their own group (Local or Remote); the choice is stored per Git
+  repository in the browser profile and survives tab/page reloads.
 - Commit log for the selected branch (or all branches) with the colored graph,
   ref badges, author and date; filter and “load more”.
 - Commit details with the full message, parents, files and `+/-`, plus checkout,

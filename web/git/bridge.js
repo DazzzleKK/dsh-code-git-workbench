@@ -114,6 +114,7 @@
       const state = {
         repos,
         repo: root,
+        repoRoot: data.repoRoot,
         ref: data.ref,
         label: currentLabel || data.label,
         refKind: data.ref === "ALL" ? "all" : "branch",

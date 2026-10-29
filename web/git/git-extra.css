@@ -214,3 +214,42 @@ body {
     display: none;
   }
 }
+
+/* --------------------------------------------------------- branch favorites */
+
+.branch-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.branch-row:hover .branch-star,
+.branch-row.favorite .branch-star,
+.branch-star:focus-visible {
+  opacity: 1;
+}
+
+.branch-row.favorite .branch-star {
+  color: var(--warn);
+}
+
+.branch-star:hover {
+  color: var(--fg);
+  background: var(--hover);
+}
+
+.branch-star:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
