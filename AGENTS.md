@@ -97,6 +97,23 @@ at startup can break the client bundle. Opening is through the `+` guide.
 activity from `aria-label` (`running` vs `not running`), and moves running rows
 first. Avoid touching host state; keep the observer cheap and idempotent.
 
+### Code autosave
+
+`web/code/app.js` implements PyCharm-like autosave:
+
+- `saveTab(tab, options)` writes a tab through `PUT /api/file`, captures
+  `tab.version`, and only clears `dirty` if no edit happened during the request.
+  Concurrent calls reuse `tab.saving`.
+- `flushTab` retries up to `AUTOSAVE_RETRIES`; `autosaveAll` saves every dirty
+  tab and returns false if any write failed.
+- Idle timer: `AUTOSAVE_IDLE_MS = 2000` after the last change.
+- Window `blur`, `visibilitychange` (hidden) and `pagehide` (keepalive) call
+  autosave; closing a tab and switching workspace must save first.
+- Switching between editor tabs intentionally does not save, matching PyCharm.
+- Manual Ctrl+S and the toolbar Save button use the same `saveTab`.
+- Do not show a toast for every autosave; the status bar uses the
+  `Auto-saved` label instead.
+
 ### Branch tree and favorites
 
 The branch list is a tree built in `web/git/main.js` from slash-separated names:
@@ -183,19 +200,21 @@ Minimum smoke test:
 1. UI boots with no `Failed to load plugins`.
 2. The right sidebar `+` guide lists Code and Git.
 3. Code opens a real file; edit and Save; verify bytes on disk.
-4. Switch workspace; tree/footer/crumbs update.
-5. Git loads branches and commits; open details and a file diff.
-6. Open Working tree changes with staged and unstaged edits; open both diffs and
+4. Autosave: edit and wait 2 s; close the tab; blur the iframe; verify the file
+   each time and that closing a dirty tab saves instead of prompting.
+5. Switch workspace; tree/footer/crumbs update and dirty tabs are saved first.
+6. Git loads branches and commits; open details and a file diff.
+7. Open Working tree changes with staged and unstaged edits; open both diffs and
    check the `[staged]` / `[unstaged]` titles.
-7. Use Pull in a branch context menu; the menu label must name the branch and the
+8. Use Pull in a branch context menu; the menu label must name the branch and the
    current branch must remain checked out.
-8. Remote group collapses when >40 remotes.
-9. Slash branches render as folders, the current branch path is open by default,
-   and folder expand/collapse survives an iframe reload.
-10. Filtering a branch expands only matching folders (for example `3493`).
-11. Star a local branch inside a folder and a remote branch inside a folder; both
+9. Remote group collapses when >40 remotes.
+10. Slash branches render as folders, the current branch path is open by default,
+    and folder expand/collapse survives an iframe reload.
+11. Filtering a branch expands only matching folders (for example `3493`).
+12. Star a local branch inside a folder and a remote branch inside a folder; both
     move to the top of their folder, and the state survives an iframe reload.
-12. Subagent catalog opens; running rows are above idle rows.
+13. Subagent catalog opens; running rows are above idle rows.
 
 Use a throwaway Git repository for actions. Do not run reset/merge/rebase/push
 against a user's working repository in tests.

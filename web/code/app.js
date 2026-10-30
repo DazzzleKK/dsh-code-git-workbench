@@ -22,6 +22,11 @@
   let cm = null;
   let suppress = false;
   let filterTimer = null;
+  let autosaveTimer = null;
+  let lastAutosavePath = null;
+
+  const AUTOSAVE_IDLE_MS = 2000;
+  const AUTOSAVE_RETRIES = 2;
 
   const MODE_BY_LANGUAGE = {
     javascript: "javascript",
@@ -141,18 +146,10 @@
 
   async function switchRoot(root) {
     if (!root || root === state.root) return;
-    const dirty = [...state.tabs.values()].filter((tab) => tab.dirty).length;
-    if (dirty) {
-      const ok = await ask(
-        "Switch workspace?",
-        "Unsaved changes in " + dirty + " tab(s) will be discarded.",
-        "Switch",
-        true,
-      );
-      if (!ok) {
-        $("root-select").value = state.root;
-        return;
-      }
+    const saved = await autosaveAll("workspace");
+    if (!saved) {
+      $("root-select").value = state.root;
+      return;
     }
     try {
       await loadContext(root);
@@ -280,14 +277,15 @@
     cm.on("change", () => {
       if (suppress || !state.active) return;
       const tab = state.tabs.get(state.active);
-      if (!tab || tab.dirty) {
-        updateStatus();
-        return;
+      if (!tab) return;
+      tab.version = (tab.version || 0) + 1;
+      if (!tab.dirty) {
+        tab.dirty = true;
+        renderTabs();
       }
-      tab.dirty = true;
-      renderTabs();
       updateStatus();
       updateSaveButton();
+      scheduleAutosave();
     });
 
     cm.on("cursorActivity", updateStatus);
@@ -388,6 +386,7 @@
     spacer.className = "spacer";
     status.appendChild(spacer);
     if (tab.dirty) add("● Unsaved", "dirty-label");
+    else if (lastAutosavePath === tab.path) add("Auto-saved", "autosave-label");
   }
 
   function showEmpty(show) {
@@ -442,6 +441,8 @@
         mode,
         language: data.language,
         dirty: false,
+        version: 0,
+        saving: null,
         cursor: { line: 0, ch: 0 },
         scroll: { left: 0, top: 0 },
       });
@@ -452,23 +453,76 @@
     }
   }
 
+  async function saveTab(tab, options) {
+    if (!tab || !tab.dirty) return true;
+    if (tab.saving) return tab.saving;
+    const version = tab.version || 0;
+    const text = tab.doc.getValue();
+    const notify = options && options.notify;
+    tab.saving = (async () => {
+      try {
+        await api("/code-git/api/file?path=" + encodeURIComponent(tab.path), {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ text }),
+          keepalive: !!(options && options.keepalive),
+        });
+        if ((tab.version || 0) === version) {
+          tab.dirty = false;
+        }
+        lastAutosavePath = tab.path;
+        renderTabs();
+        updateStatus();
+        updateSaveButton();
+        if (notify) toast("ok", "Saved " + basename(tab.path));
+        return true;
+      } catch (error) {
+        toast("error", String(error.message || error));
+        return false;
+      }
+    })();
+    try {
+      return await tab.saving;
+    } finally {
+      tab.saving = null;
+    }
+  }
+
+  async function flushTab(tab, options) {
+    for (let attempt = 0; attempt <= AUTOSAVE_RETRIES; attempt++) {
+      if (!tab.dirty) return true;
+      const ok = await saveTab(tab, options);
+      if (!ok) return false;
+    }
+    return !tab.dirty;
+  }
+
+  async function autosaveAll(reason, options) {
+    const tabs = [...state.tabs.values()].filter((tab) => tab.dirty);
+    if (!tabs.length) return true;
+    let ok = true;
+    for (const tab of tabs) {
+      if (!(await flushTab(tab, Object.assign({ notify: false }, options)))) {
+        ok = false;
+      }
+    }
+    if (ok) {
+      updateStatus();
+    }
+    return ok;
+  }
+
+  function scheduleAutosave() {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => {
+      autosaveAll("idle");
+    }, AUTOSAVE_IDLE_MS);
+  }
+
   async function save() {
     const tab = state.active ? state.tabs.get(state.active) : null;
     if (!tab || !tab.dirty) return;
-    try {
-      await api("/code-git/api/file?path=" + encodeURIComponent(tab.path), {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: cm.getValue() }),
-      });
-      tab.dirty = false;
-      renderTabs();
-      updateStatus();
-      updateSaveButton();
-      toast("ok", "Saved " + basename(tab.path));
-    } catch (error) {
-      toast("error", String(error.message || error));
-    }
+    await flushTab(tab, { notify: true });
   }
 
   async function reloadActive() {
@@ -507,8 +561,8 @@
     const tab = state.tabs.get(path);
     if (!tab) return;
     if (tab.dirty) {
-      const ok = await ask("Discard changes?", "Close " + basename(path) + " and lose its unsaved changes?", "Discard", true);
-      if (!ok) return;
+      const saved = await flushTab(tab, { notify: false });
+      if (!saved) return;
     }
     state.tabs.delete(path);
     if (state.active === path) {
@@ -712,6 +766,20 @@
     });
   }
 
+  function bindAutosave() {
+    window.addEventListener("blur", () => {
+      autosaveAll("blur");
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        autosaveAll("hidden");
+      }
+    });
+    window.addEventListener("pagehide", () => {
+      autosaveAll("pagehide", { keepalive: true });
+    });
+  }
+
   function bindToolbar() {
     $("save").addEventListener("click", save);
     $("reload").addEventListener("click", reloadActive);
@@ -745,6 +813,7 @@
     adoptTheme();
     initEditor();
     bindToolbar();
+    bindAutosave();
     setupSplitter();
     showEmpty(true);
     renderCrumbs();

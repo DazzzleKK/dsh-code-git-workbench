@@ -736,3 +736,8 @@ body.resizing {
 [hidden] {
   display: none !important;
 }
+
+.autosave-label {
+  color: var(--muted);
+  opacity: 0.8;
+}

@@ -90,12 +90,21 @@ Restart the application afterwards.
   the session directory is not a repository, Code starts in the first workspace
   that is one. The choice is remembered per session.
 - Tabs keep their own document, cursor, scroll position and dirty state.
-- `Ctrl+S` saves; `Ctrl+R` reloads the active file. The toolbar has the same
-  actions.
+- **Autosave** is on, modelled after PyCharm:
+  - idle for 2 seconds after the last edit — every dirty tab is written;
+  - switching to another application / hiding the DSH window;
+  - closing a file tab (the tab is saved, not discarded);
+  - switching the workspace (all dirty tabs are saved first);
+  - quitting the page (`pagehide`, keepalive request);
+  - clicking another DSH tab (for example Git) blurs the editor and triggers a
+    save, which covers the “before VCS operation” case.
+  Switching between file tabs does **not** force a save; the idle/focus/close
+  triggers do, just like PyCharm. `Ctrl+S` still saves manually; the status bar
+  shows `Auto-saved` after a successful write.
+- `Ctrl+R` reloads the active file. The toolbar has Save and Reload actions.
 - CodeMirror offers line numbers, bracket matching, auto-close, incremental
   search (`Ctrl+F`) and modes for JS/TS, Python, JSON, Markdown, HTML/CSS, YAML,
   SQL, shell, PowerShell and C-like languages.
-- Closing a tab with unsaved changes asks for confirmation.
 - Files are read and written as UTF-8. Files larger than 2 MB and binary files
   are rejected for display.
 
