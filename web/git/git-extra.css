@@ -310,3 +310,139 @@ body {
   font-size: 9.5px;
   font-variant-numeric: tabular-nums;
 }
+
+/* --------------------------------------------------- working tree changes */
+
+#btn-changes {
+  position: relative;
+}
+
+.toolbar-badge {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 8px;
+  line-height: 13px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.changes-layer {
+  z-index: 115;
+}
+
+.changes-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  height: 100%;
+  max-height: 100%;
+  border: 1px solid var(--vscode-panel-border, #333);
+  border-radius: 8px;
+  background: var(--vscode-editor-background, #1b1b1d);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.changes-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px 18px;
+}
+
+.changes-empty {
+  padding: 30px 16px;
+  color: var(--vscode-descriptionForeground, #999);
+  font-size: 12px;
+  text-align: center;
+}
+
+.changes-group {
+  margin-bottom: 14px;
+}
+
+.changes-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px 6px;
+  color: var(--vscode-descriptionForeground, #999);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.changes-group-title .count {
+  font-family: var(--mono);
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.change-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.change-row:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+
+.change-status {
+  flex: 0 0 auto;
+  width: 16px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.change-status.added {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+}
+
+.change-status.modified {
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
+}
+
+.change-status.deleted {
+  color: var(--vscode-errorForeground, #f85149);
+}
+
+.change-status.renamed {
+  color: var(--vscode-focusBorder, #4f9cf7);
+}
+
+.change-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vscode-foreground, #ddd);
+  font-size: 11.5px;
+}
+
+.change-old-path {
+  color: var(--vscode-descriptionForeground, #888);
+  font-size: 10.5px;
+}
+
+.change-scope {
+  flex: 0 0 auto;
+  color: var(--vscode-descriptionForeground, #888);
+  font-size: 9.5px;
+}

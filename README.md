@@ -121,6 +121,12 @@ Restart the application afterwards.
   file context menu.
 - Fetch all, pull and push. Push falls back to `--set-upstream origin` when a
   branch has no upstream.
+- The branch context menu can pull a specific branch into the current branch:
+  `Pull '<branch>' into Current` for a remote branch or a local branch with an
+  upstream.
+- The toolbar diff button opens **Working tree changes**: staged, unstaged and
+  untracked files with counts. Clicking a file opens its diff (`[staged]` =
+  index vs HEAD, `[unstaged]` = working tree vs index).
 - Remote branches collapse automatically when there are more than 40 of them.
 
 ### Subagent order
@@ -156,9 +162,11 @@ API surface:
 | `GET /code-git/api/tree` | one directory level |
 | `GET/PUT /code-git/api/file` | read/write one file |
 | `GET /code-git/api/git/state` | branches, commits, refs, ahead/behind |
+| `GET /code-git/api/git/status` | staged, unstaged and untracked files |
+| `GET /code-git/api/git/worktree-diff` | index/HEAD/working tree file contents |
 | `GET /code-git/api/git/commit` | commit message, parents, file stats |
 | `GET /code-git/api/git/diff` | old/new file contents |
-| `POST /code-git/api/git/action` | checkout, merge, rebase, reset, fetch, push, … |
+| `POST /code-git/api/git/action` | checkout, merge, rebase, reset, fetch, pull branch, push, … |
 
 Every request is checked against the session's registered workspaces; paths are
 resolved and confined to the selected root. Git runs through `execFile` without

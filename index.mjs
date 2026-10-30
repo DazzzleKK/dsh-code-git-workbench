@@ -317,6 +317,47 @@ function parseNumstatZ(out) {
   return result;
 }
 
+function parseStatusZ(out) {
+  const staged = [];
+  const unstaged = [];
+  const untracked = [];
+  const parts = out.split("\u0000");
+  for (let index = 0; index < parts.length; index++) {
+    const token = parts[index];
+    if (!token) continue;
+    const x = token[0];
+    const y = token[1];
+    if (x === "!" && y === "!") continue;
+    const filePath = token.slice(3);
+    if (!filePath) continue;
+    let oldPath;
+    if (x === "R" || x === "C" || y === "R" || y === "C") {
+      oldPath = parts[++index] || undefined;
+    }
+    if (x === "?" && y === "?") {
+      untracked.push({ path: filePath, status: "?" });
+      continue;
+    }
+    if (x === "U" || y === "U") {
+      unstaged.push({ path: filePath, oldPath, status: "U" });
+      continue;
+    }
+    if (x !== " " && x !== "?") staged.push({ path: filePath, oldPath, status: x });
+    if (y !== " " && y !== "?") unstaged.push({ path: filePath, oldPath, status: y });
+  }
+  return {
+    staged,
+    unstaged,
+    untracked,
+    counts: {
+      staged: staged.length,
+      unstaged: unstaged.length,
+      untracked: untracked.length,
+      total: staged.length + unstaged.length + untracked.length,
+    },
+  };
+}
+
 function buildRefMap(branches, tags, headSha) {
   const map = new Map();
   const add = (sha, badge) => {
@@ -624,6 +665,111 @@ async function apiGitState(ctx, url, res) {
   });
 }
 
+async function apiGitStatus(ctx, url, res) {
+  const context = await sessionContext(
+    ctx,
+    url.searchParams.get("session"),
+    res,
+    url.searchParams.get("root"),
+  );
+  if (!context) return;
+  if (!context.repoRoot) {
+    sendJson(res, 404, { error: "not-a-repository" });
+    return;
+  }
+  const out = await git(context.repoRoot, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=all",
+  ]);
+  sendJson(res, 200, {
+    ...parseStatusZ(out),
+    root: context.root,
+    repoRoot: context.repoRoot,
+  });
+}
+
+async function readWorkingFile(root, filePath) {
+  const absolute = safeResolve(root, filePath);
+  const info = await stat(absolute);
+  if (!info.isFile()) {
+    return { binary: false, text: "", missing: true };
+  }
+  if (info.size > MAX_FILE_BYTES) {
+    const error = new Error("file is too large to display");
+    error.status = 413;
+    throw error;
+  }
+  const buffer = await readFile(absolute);
+  if (isProbablyBinary(buffer)) return { binary: true, text: "" };
+  return { binary: false, text: buffer.toString("utf8") };
+}
+
+async function showGitPath(root, revision, filePath) {
+  try {
+    const buffer = await gitBuffer(root, ["show", `${revision}:${filePath}`], { timeout: 60000 });
+    if (isProbablyBinary(buffer)) return { binary: true, text: "" };
+    return { binary: false, text: buffer.toString("utf8") };
+  } catch {
+    return { binary: false, text: "", missing: true };
+  }
+}
+
+async function apiGitWorktreeDiff(ctx, url, res) {
+  const context = await sessionContext(
+    ctx,
+    url.searchParams.get("session"),
+    res,
+    url.searchParams.get("root"),
+  );
+  if (!context) return;
+  if (!context.repoRoot) {
+    sendJson(res, 404, { error: "not-a-repository" });
+    return;
+  }
+  const root = context.repoRoot;
+  const filePath = url.searchParams.get("path") || "";
+  const oldPath = url.searchParams.get("oldPath") || filePath;
+  const staged = url.searchParams.get("staged") === "1";
+  const status = (url.searchParams.get("status") || "M").slice(0, 1);
+  if (!filePath || filePath.includes("\u0000")) {
+    sendJson(res, 400, { error: "invalid-path" });
+    return;
+  }
+  const absolute = resolve(root, filePath);
+  if (!inside(root, absolute)) {
+    sendJson(res, 403, { error: "outside-repository" });
+    return;
+  }
+
+  let oldSide = { binary: false, text: "" };
+  let newSide = { binary: false, text: "" };
+  if (staged) {
+    if (status !== "A") oldSide = await showGitPath(root, "HEAD", oldPath);
+    if (status !== "D") newSide = await showGitPath(root, "", filePath);
+  } else if (status === "?" || status === "A") {
+    newSide = await readWorkingFile(root, filePath);
+  } else if (status === "D") {
+    oldSide = await showGitPath(root, "", oldPath);
+  } else {
+    oldSide = await showGitPath(root, "", oldPath);
+    newSide = await readWorkingFile(root, filePath);
+  }
+
+  sendJson(res, 200, {
+    path: filePath,
+    oldPath,
+    staged,
+    status,
+    old: oldSide.text,
+    new: newSide.text,
+    binary: oldSide.binary || newSide.binary,
+    oldMissing: oldSide.missing === true,
+    newMissing: newSide.missing === true,
+  });
+}
+
 async function apiGitCommit(ctx, url, res) {
   const context = await sessionContext(
     ctx,
@@ -758,6 +904,13 @@ async function apiGitAction(ctx, url, res, req) {
   const branch = /^[A-Za-z0-9._\/-]+$/.test(ref) ? ref : "";
   const revision = /^[0-9a-f]{7,40}$/i.test(hash) ? hash : "";
   const branchName = /^[A-Za-z0-9._\/-]+$/.test(name) ? name : "";
+  const remote = /^[A-Za-z0-9._-]+$/.test(String(body.remote || "")) ? String(body.remote) : "";
+  const remoteBranch =
+    /^[A-Za-z0-9._\/-]+$/.test(String(body.branch || "")) &&
+    !String(body.branch || "").startsWith("-") &&
+    !String(body.branch || "").includes("..")
+      ? String(body.branch)
+      : "";
 
   try {
     switch (action) {
@@ -835,6 +988,17 @@ async function apiGitAction(ctx, url, res, req) {
         if (!branch || !branchName) throw Object.assign(new Error("old and new branch names are required"), { status: 400 });
         await git(root, ["branch", "-m", branch, branchName]);
         return sendJson(res, 200, { ok: true, message: `Renamed ${branch} to ${branchName}` });
+      }
+      case "pullBranch": {
+        if (!remote || !remoteBranch) {
+          throw Object.assign(new Error("remote and branch are required"), { status: 400 });
+        }
+        await git(root, ["fetch", remote, remoteBranch], { timeout: 0 });
+        await git(root, ["merge", "--no-edit", "FETCH_HEAD"]);
+        return sendJson(res, 200, {
+          ok: true,
+          message: `Pulled ${remote}/${remoteBranch} into the current branch`,
+        });
       }
       case "fetch": {
         await git(root, ["fetch", "--all", "--prune"], { timeout: 0 });
@@ -917,6 +1081,8 @@ async function handle(ctx, req, res) {
   if (url.pathname === BASE + "/api/tree") return apiTree(ctx, url, res);
   if (url.pathname === BASE + "/api/file") return apiFile(ctx, url, res, req);
   if (url.pathname === BASE + "/api/git/state") return apiGitState(ctx, url, res);
+  if (url.pathname === BASE + "/api/git/status") return apiGitStatus(ctx, url, res);
+  if (url.pathname === BASE + "/api/git/worktree-diff") return apiGitWorktreeDiff(ctx, url, res);
   if (url.pathname === BASE + "/api/git/commit") return apiGitCommit(ctx, url, res);
   if (url.pathname === BASE + "/api/git/diff") return apiGitDiff(ctx, url, res);
   if (url.pathname === BASE + "/api/git/action" && req.method === "POST") return apiGitAction(ctx, url, res, req);

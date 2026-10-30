@@ -66,6 +66,11 @@ Rules:
 - Body size is capped; files over 2 MB are rejected.
 - API routes are listed in README; keep the table and `web/git/bridge.js` in
   sync when adding one.
+- `apiGitStatus` parses `git status --porcelain=v1 -z --untracked-files=all`
+  into staged, unstaged and untracked lists. `apiGitWorktreeDiff` compares
+  HEAD/index for staged files and index/working tree for unstaged files.
+- `pullBranch` fetches the selected remote branch and merges `FETCH_HEAD` into
+  the current branch; it does not check out the other branch.
 - Destructive actions (reset hard, delete branch, push) must remain explicit
   user actions with the existing confirmation prompts in the UI.
 
@@ -124,6 +129,21 @@ Favorites are a DSH-only UI feature:
 When porting the Git UI to the VS Code extension, carry the tree, favorites and
 CSS with it; they are not host-side features.
 
+### Working tree changes and branch pull
+
+- `main.js` keeps a `changesStatus` cache and posts `{ type: "status" }` after each
+  `state`; `bridge.js` fetches `/api/git/status` and emits `{ type: "status" }`.
+- The toolbar diff button opens `#changes-layer`; groups are Staged, Unstaged and
+  Untracked. Each row posts a `diff` message with `changeDiff: true`, `staged`,
+  `path`, `oldPath` and `status`.
+- `bridge.js` renders those diffs through `/api/git/worktree-diff`; keep the
+  `[staged]` / `[unstaged]` title suffix.
+- The branch context menu adds a `Pull` item from `pullTarget`: the current
+  branch uses the existing `pull` action, other branches call `pullBranch` with
+  `remote` and `branch`. Do not check out the selected branch implicitly.
+- `Working tree changes` is read-only; there is no staging/commit control in this
+  panel yet.
+
 ### Git UI bridge
 
 `web/git/bridge.js` implements the `acquireVsCodeApi()` contract:
@@ -165,13 +185,17 @@ Minimum smoke test:
 3. Code opens a real file; edit and Save; verify bytes on disk.
 4. Switch workspace; tree/footer/crumbs update.
 5. Git loads branches and commits; open details and a file diff.
-6. Remote group collapses when >40 remotes.
-7. Slash branches render as folders, the current branch path is open by default,
+6. Open Working tree changes with staged and unstaged edits; open both diffs and
+   check the `[staged]` / `[unstaged]` titles.
+7. Use Pull in a branch context menu; the menu label must name the branch and the
+   current branch must remain checked out.
+8. Remote group collapses when >40 remotes.
+9. Slash branches render as folders, the current branch path is open by default,
    and folder expand/collapse survives an iframe reload.
-8. Filtering a branch expands only matching folders (for example `3493`).
-9. Star a local branch inside a folder and a remote branch inside a folder; both
-   move to the top of their folder, and the state survives an iframe reload.
-10. Subagent catalog opens; running rows are above idle rows.
+10. Filtering a branch expands only matching folders (for example `3493`).
+11. Star a local branch inside a folder and a remote branch inside a folder; both
+    move to the top of their folder, and the state survives an iframe reload.
+12. Subagent catalog opens; running rows are above idle rows.
 
 Use a throwaway Git repository for actions. Do not run reset/merge/rebase/push
 against a user's working repository in tests.

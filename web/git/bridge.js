@@ -139,6 +139,15 @@
     }
   }
 
+  async function sendStatus() {
+    try {
+      const data = await api("/code-git/api/git/status");
+      emit({ type: "status", status: data });
+    } catch (error) {
+      emit({ type: "status", error: errorText(error) });
+    }
+  }
+
   async function sendDetails(hash) {
     try {
       const data = await api("/code-git/api/git/commit?hash=" + encodeURIComponent(hash));
@@ -310,7 +319,7 @@
     const title = document.getElementById("diff-title");
     const stats = document.getElementById("diff-stats");
     title.textContent =
-      data.path + (data.oldPath && data.oldPath !== data.path ? "  ← " + data.oldPath : "");
+      data.title || data.path + (data.oldPath && data.oldPath !== data.path ? "  ← " + data.oldPath : "");
     body.replaceChildren();
 
     if (data.binary) {
@@ -359,6 +368,24 @@
 
   async function showDiff(message) {
     try {
+      if (message.changeDiff) {
+        const data = await api(
+          "/code-git/api/git/worktree-diff?path=" +
+            encodeURIComponent(message.path) +
+            "&oldPath=" +
+            encodeURIComponent(message.oldPath || message.path) +
+            "&staged=" +
+            (message.staged ? "1" : "0") +
+            "&status=" +
+            encodeURIComponent(message.status || "M"),
+        );
+        const scope = message.status === "?" ? "untracked" : message.staged ? "staged" : "unstaged";
+        renderDiff({
+          ...data,
+          title: data.path + (data.oldPath && data.oldPath !== data.path ? "  ← " + data.oldPath : "") + "  [" + scope + "]",
+        });
+        return;
+      }
       if (message.workingTree) {
         const base = await api(
           "/code-git/api/git/diff?hash=" +
@@ -472,6 +499,13 @@
         return;
       case "pull":
         await perform({ action: "pull" }, "Pulled", { label: "Pulling…" });
+        return;
+      case "pullBranch":
+        await perform(
+          { action: "pullBranch", remote: message.remote || "", branch: message.branch || "" },
+          "Pulled " + (message.remote || "") + "/" + (message.branch || ""),
+          { label: "Pulling…" },
+        );
         return;
       case "push":
         await perform({ action: "push", ref: message.ref || "" }, "Pushed", { label: "Pushing…" });
@@ -688,6 +722,9 @@
         return;
       case "diff":
         await showDiff(message);
+        return;
+      case "status":
+        await sendStatus();
         return;
       case "action":
         await runAction(message);

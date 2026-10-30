@@ -35,6 +35,7 @@
   var menuOpen = false;
   var busy = false;
   var noRepoText = '';
+  var changesStatus = null;
 
   var absFmt = new Intl.DateTimeFormat(undefined, {
     year: '2-digit',
@@ -397,6 +398,9 @@
     $('btn-refresh').addEventListener('click', function () {
       vscode.postMessage({ type: 'refresh' });
     });
+    $('btn-changes').addEventListener('click', openChanges);
+    $('changes-close').addEventListener('click', closeChanges);
+    $('changes-refresh').addEventListener('click', requestStatus);
     $('btn-fetch').addEventListener('click', function () {
       sendAction('fetch');
     });
@@ -535,6 +539,11 @@
       case 'state':
         noRepoText = '';
         applyState(message.state);
+        requestStatus();
+        break;
+      case 'status':
+        changesStatus = message.status || { error: message.error || 'Could not load changes.' };
+        renderChanges();
         break;
       case 'details':
         onDetails(message);
@@ -551,11 +560,14 @@
       case 'emptystate':
         state = null;
         selectedHash = null;
+        changesStatus = null;
         noRepoText = message.text || 'No Git repository found.';
         renderToolbar();
         renderBranches();
         renderCommits();
         renderDetails();
+        renderChanges();
+        updateChangesBadge(0);
         break;
       default:
         break;
@@ -565,6 +577,9 @@
   function applyState(next) {
     var previous = state;
     state = next;
+    if (previous && previous.repo !== next.repo) {
+      changesStatus = null;
+    }
     pruneFavorites();
 
     if (!remoteDefaultApplied && !persisted.collapsed) {
@@ -694,6 +709,107 @@
       total + suffix + ' commit' + (total === 1 ? '' : 's') +
       ' · ' + state.branches.length + ' branch' + (state.branches.length === 1 ? '' : 'es') +
       (state.limit ? ' · limit ' + state.limit : '');
+  }
+
+  function requestStatus() {
+    if (state) {
+      vscode.postMessage({ type: 'status' });
+    }
+  }
+
+  function changeClass(status) {
+    if (status === 'A' || status === '?') return 'added';
+    if (status === 'D') return 'deleted';
+    if (status === 'R' || status === 'C') return 'renamed';
+    return 'modified';
+  }
+
+  function renderChanges() {
+    var body = $('changes-body');
+    var summary = $('changes-summary');
+    body.replaceChildren();
+    if (!state) {
+      body.appendChild(h('div', 'changes-empty', noRepoText || 'No repository.'));
+      summary.textContent = '';
+      updateChangesBadge(0);
+      return;
+    }
+    if (!changesStatus) {
+      body.appendChild(h('div', 'changes-empty', 'Loading changes…'));
+      summary.textContent = '';
+      return;
+    }
+    if (changesStatus.error) {
+      body.appendChild(h('div', 'changes-empty', changesStatus.error));
+      summary.textContent = '';
+      updateChangesBadge(0);
+      return;
+    }
+
+    var counts = changesStatus.counts || { staged: 0, unstaged: 0, untracked: 0, total: 0 };
+    summary.textContent =
+      'staged ' + counts.staged + ' · unstaged ' + counts.unstaged + ' · untracked ' + counts.untracked;
+    updateChangesBadge(counts.total || 0);
+
+    var addGroup = function (title, items, staged, scope) {
+      if (!items || !items.length) return;
+      var group = h('div', 'changes-group');
+      var head = h('div', 'changes-group-title');
+      head.appendChild(h('span', null, title));
+      head.appendChild(h('span', 'count', String(items.length)));
+      group.appendChild(head);
+      items.forEach(function (item) {
+        var status = item.status || 'M';
+        var row = h('div', 'change-row');
+        row.title = item.path + (item.oldPath ? ' (from ' + item.oldPath + ')' : '');
+        var badge = h('span', 'change-status ' + changeClass(status), status === '?' ? '?' : status);
+        row.appendChild(badge);
+        var path = h('span', 'change-path', item.path);
+        row.appendChild(path);
+        if (item.oldPath) {
+          row.appendChild(h('span', 'change-old-path', '← ' + item.oldPath));
+        }
+        row.appendChild(h('span', 'change-scope', scope));
+        row.addEventListener('click', function () {
+          vscode.postMessage({
+            type: 'diff',
+            changeDiff: true,
+            staged: staged,
+            path: item.path,
+            oldPath: item.oldPath || item.path,
+            status: status,
+          });
+        });
+        group.appendChild(row);
+      });
+      body.appendChild(group);
+    };
+
+    addGroup('Staged', changesStatus.staged, true, 'staged');
+    addGroup('Unstaged', changesStatus.unstaged, false, 'unstaged');
+    addGroup('Untracked', changesStatus.untracked, false, 'untracked');
+
+    if (!counts.total) {
+      body.appendChild(h('div', 'changes-empty', 'Working tree is clean.'));
+    }
+  }
+
+  function updateChangesBadge(total) {
+    var badge = $('changes-count');
+    if (!badge) return;
+    badge.textContent = total > 99 ? '99+' : String(total);
+    badge.hidden = !total;
+    $('btn-changes').title = total ? total + ' working tree change(s)' : 'Working tree changes';
+  }
+
+  function openChanges() {
+    $('changes-layer').hidden = false;
+    requestStatus();
+    renderChanges();
+  }
+
+  function closeChanges() {
+    $('changes-layer').hidden = true;
   }
 
   /* ------------------------------------------------------------- branches */
@@ -1549,10 +1665,42 @@
     );
   }
 
+  function pullTarget(branch) {
+    if (branch.current) {
+      return branch.upstream ? { action: 'pull', label: "Pull '" + branch.name + "'" } : null;
+    }
+    if (branch.isRemote) {
+      var remoteParts = branch.name.split('/');
+      if (remoteParts.length < 2) {
+        return null;
+      }
+      return {
+        action: 'pullBranch',
+        remote: remoteParts[0],
+        branch: remoteParts.slice(1).join('/'),
+        label: "Pull '" + branch.name + "' into Current",
+      };
+    }
+    if (branch.upstream) {
+      var upstreamParts = branch.upstream.split('/');
+      if (upstreamParts.length < 2) {
+        return null;
+      }
+      return {
+        action: 'pullBranch',
+        remote: upstreamParts[0],
+        branch: upstreamParts.slice(1).join('/'),
+        label: "Pull '" + branch.name + "' into Current",
+      };
+    }
+    return null;
+  }
+
   function branchMenu(branch, x, y) {
     var current = state && state.current;
     var isCurrent = !!branch.current;
     var favorite = isFavorite(branch);
+    var pull = pullTarget(branch);
     var items = [];
 
     items.push({
@@ -1569,6 +1717,19 @@
       disabled: isCurrent,
       run: function () {
         sendAction('checkoutBranch', { ref: branch.name, remote: branch.isRemote });
+      },
+    });
+    items.push({
+      label: pull ? pull.label : 'Pull (no upstream)',
+      icon: 'repo-pull',
+      disabled: !pull,
+      run: function () {
+        if (!pull) return;
+        if (pull.action === 'pull') {
+          sendAction('pull');
+        } else {
+          sendAction('pullBranch', { remote: pull.remote, branch: pull.branch });
+        }
       },
     });
     if (!branch.isRemote) {

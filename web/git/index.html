@@ -15,6 +15,10 @@
       <button class="icon-btn" id="btn-refresh" title="Refresh (F5)">
         <i class="codicon codicon-refresh"></i>
       </button>
+      <button class="icon-btn" id="btn-changes" title="Working tree changes">
+        <i class="codicon codicon-diff"></i>
+        <span class="toolbar-badge" id="changes-count" hidden></span>
+      </button>
       <span class="toolbar-sep"></span>
       <button class="icon-btn" id="btn-fetch" title="Fetch all remotes">
         <i class="codicon codicon-repo-fetch"></i>
@@ -122,6 +126,22 @@
   <div class="toasts" id="toasts"></div>
   <div class="menu-layer" id="menu-layer" hidden>
     <div class="ctx-menu" id="ctx-menu" role="menu"></div>
+  </div>
+</div>
+
+<div class="diff-layer changes-layer" id="changes-layer" hidden>
+  <div class="changes-panel" role="dialog" aria-modal="true">
+    <header class="diff-head">
+      <span class="diff-title">Working tree changes</span>
+      <span class="diff-stats" id="changes-summary"></span>
+      <button class="icon-btn" id="changes-refresh" title="Refresh changes" aria-label="Refresh changes">
+        <i class="codicon codicon-refresh"></i>
+      </button>
+      <button class="icon-btn" id="changes-close" title="Close changes" aria-label="Close changes">
+        <i class="codicon codicon-close"></i>
+      </button>
+    </header>
+    <div class="changes-body" id="changes-body"></div>
   </div>
 </div>
 

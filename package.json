@@ -1,6 +1,6 @@
 {
   "name": "dsh-code-git-workbench",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Code and Git workbench for the DeepSeek Harness Web UI: project file tree, code editor, and a PyCharm-style Git panel.",
   "license": "MIT",
